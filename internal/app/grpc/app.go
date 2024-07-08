@@ -18,7 +18,8 @@ type App struct {
 func New(log *slog.Logger, port int) *App {
 	gRPCServer := grpc.NewServer()
 
-	grpcAuth.Register(gRPCServer)
+	// replate nil to auth service
+	grpcAuth.Register(gRPCServer, nil)
 
 	return &App{
 		log:        log,
@@ -30,7 +31,7 @@ func New(log *slog.Logger, port int) *App {
 func (a *App) MustRun() {
 	if err := a.Run(); err != nil {
 		panic(err)
-	} 
+	}
 }
 
 func (a *App) Run() error {
