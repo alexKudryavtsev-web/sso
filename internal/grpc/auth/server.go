@@ -2,6 +2,9 @@ package auth
 
 import (
 	"context"
+	"errors"
+	"sso/internal/services/auth"
+	"sso/internal/storage"
 
 	ssov1 "github.com/alexKudryavtsev-web/protos/gen/go/sso"
 	"google.golang.org/grpc"
@@ -10,9 +13,9 @@ import (
 )
 
 type Auth interface {
-	Login(ctx context.Context, email string, password string, appID int) (token string, err error)
+	Login(ctx context.Context, email string, password string, appID int64) (token string, err error)
 	RegisterNewUser(ctx context.Context, email string, password string) (userID int64, err error)
-	IsAdmin(ctx context.Context, userID int) (bool, error)
+	IsAdmin(ctx context.Context, userID int64) (bool, error)
 }
 
 type serverApi struct {
@@ -33,7 +36,11 @@ func (s *serverApi) Login(ctx context.Context, req *ssov1.LoginRequest) (*ssov1.
 		return nil, err
 	}
 
-	token, err := s.auth.Login(ctx, req.Email, req.Password, int(req.AppId))
+	token, err := s.auth.Login(ctx, req.Email, req.Password, int64(req.AppId))
+
+	if errors.Is(err, auth.ErrInvalidCredentials) {
+		return nil, status.Error(codes.InvalidArgument, "invalid credentialsv")
+	}
 
 	if err != nil {
 		return nil, status.Error(codes.Internal, "internal error ")
@@ -51,6 +58,10 @@ func (s *serverApi) Register(ctx context.Context, req *ssov1.RegisterRequest) (*
 
 	userId, err := s.auth.RegisterNewUser(ctx, req.Email, req.Password)
 
+	if errors.Is(err, storage.ErrUserExists) {
+		return nil, status.Error(codes.AlreadyExists, "user already exists")
+	}
+
 	if err != nil {
 		return nil, status.Error(codes.Internal, "internal error ")
 	}
@@ -65,8 +76,12 @@ func (s *serverApi) IsAdmin(ctx context.Context, req *ssov1.IsAdminRequest) (*ss
 		return nil, err
 	}
 
-	isAdmin, err := s.auth.IsAdmin(ctx, int(req.UserId))
+	isAdmin, err := s.auth.IsAdmin(ctx, int64(req.UserId))
 
+	if errors.Is(err, storage.ErrUserNotFound) {
+		return nil, status.Error(codes.NotFound, "user not found")
+	}
+ 
 	if err != nil {
 		return nil, status.Error(codes.Internal, "internal error ")
 	}
@@ -86,7 +101,7 @@ func validateLogin(req *ssov1.LoginRequest) error {
 	}
 
 	if req.GetAppId() == emptyValue {
-		return status.Error(codes.InvalidArgument, "password is required")
+		return status.Error(codes.InvalidArgument, "app is required")
 	}
 
 	return nil

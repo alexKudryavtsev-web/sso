@@ -3,6 +3,8 @@ package app
 import (
 	"log/slog"
 	grpcapp "sso/internal/app/grpc"
+	"sso/internal/services/auth"
+	"sso/internal/storage/sqlite"
 	"time"
 )
 
@@ -11,8 +13,15 @@ type App struct {
 }
 
 func New(log *slog.Logger, gprcPort int, storagePath string, tokenTTL time.Duration) *App {
+	storage, err := sqlite.New(storagePath)
 
-	grpcApp := grpcapp.New(log, gprcPort)
+	if err != nil {
+		panic(err)
+	}
+
+	authService := auth.New( log, storage, storage, storage, tokenTTL)
+
+	grpcApp := grpcapp.New(log, authService, gprcPort)
 
 	return &App{
 		GRPCServer: grpcApp,
